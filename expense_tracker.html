@@ -293,7 +293,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="aform" id="aForm">
     <div class="fr"><input class="fi" id="tDesc" placeholder="Description" /><input class="fi" id="tAmt" type="number" placeholder="Amount" style="max-width:90px"></div>
     <div class="fr">
-      <select class="fs" id="tCat"><option>Food & Drink</option><option>Groceries</option><option>Transport</option><option>Rent/Utilities</option><option>Health</option><option>Shopping</option><option>Entertainment</option><option>Savings</option><option>Debt</option><option>Income</option><option>Misc</option><option>Other</option></select>
+      <select class="fs" id="tCat"><option>Food & Drink</option><option>Groceries</option><option>Transportaionation</option><option>Rent/Utilities</option><option>Health</option><option>Shopping</option><option>Entertainment</option><option>Savings</option><option>Debt</option><option>Income</option><option>Misc</option><option>Other</option></select>
       <select class="fs" id="tType"><option>Need</option><option>Want</option><option>Savings</option><option>Debt</option><option>Income</option></select>
     </div>
     <div class="fr">
@@ -347,14 +347,14 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 const MO=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const MOLONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const CATS={
-  'Food & Drink':'🍔','Groceries':'🛒','Transport':'🚗','Rent/Utilities':'🏠',
+  'Food & Drink':'🍔','Groceries':'🛒','Transportaionation':'🚗','Rent/Utilities':'🏠',
   'Health':'💊','Shopping':'🛍','Entertainment':'🎬','Savings':'💰',
   'Debt':'💳','Income':'💵','Misc':'📦','Other':'📦'
 };
 const TC={'Need':'#7ab8f0','Want':'#c8a8f0','Savings':'#c8f07a','Debt':'#f07a7a','Income':'#7af0a8'};
 const BUDGET=[
   {name:'Food & Drink',planned:400,color:'#c8f07a'},{name:'Rent/Utilities',planned:1200,color:'#7ab8f0'},
-  {name:'Transport',planned:200,color:'#f0c87a'},{name:'Groceries',planned:300,color:'#a8f0c8'},
+  {name:'Transportaionation',planned:200,color:'#f0c87a'},{name:'Groceries',planned:300,color:'#a8f0c8'},
   {name:'Health',planned:100,color:'#f0a8c8'},{name:'Shopping',planned:150,color:'#c8a8f0'},
   {name:'Entertainment',planned:80,color:'#f07aa8'},{name:'Debt',planned:650,color:'#f07a7a'},
   {name:'Misc',planned:120,color:'#aaa'}
@@ -665,7 +665,7 @@ function seedDemo() {
     {id:5,desc:'Car Loan',amount:-650,category:'Debt',type:'Debt',date:`${vY}-${p(vM+1)}-05`},
     {id:6,desc:'Netflix',amount:-17.99,category:'Entertainment',type:'Want',date:`${vY}-${p(vM+1)}-06`},
     {id:7,desc:'TFSA Contribution',amount:-500,category:'Savings',type:'Savings',date:`${vY}-${p(vM+1)}-07`},
-    {id:8,desc:'Gas',amount:-59.88,category:'Transport',type:'Need',date:`${vY}-${p(vM+1)}-08`},
+    {id:8,desc:'Gas',amount:-59.88,category:'Transportaion',type:'Need',date:`${vY}-${p(vM+1)}-08`},
     {id:9,desc:'Shoppers Drug Mart',amount:-22.60,category:'Health',type:'Need',date:`${vY}-${p(vM+1)}-09`},
     {id:10,desc:'Dinner – The Keg',amount:-97.21,category:'Food & Drink',type:'Want',date:`${vY}-${p(vM+1)}-10`},
   ];
@@ -844,7 +844,7 @@ function guessCat(r){
   if(/food|restaurant|café|coffee|tim|mcdon|burger|pizza|starbuck/.test(l))return'Food & Drink';
   if(/grocer|superstore|loblaws|sobeys|costco|walmart/.test(l))return'Groceries';
   if(/rent|hydro|utility|utilities|gas bill|electric|water|bell|rogers|telus/.test(l))return'Rent/Utilities';
-  if(/transport|transit|ttc|uber|lyft|parking|petro|esso|gas station/.test(l))return'Transport';
+  if(/Transportaion|transit|ttc|uber|lyft|parking|petro|esso|gas station/.test(l))return'Transportaion';
   if(/health|pharmacy|shoppers|drug|doctor|dental|medical/.test(l))return'Health';
   if(/amazon|shop|zara|h&m|indigo|best buy/.test(l))return'Shopping';
   if(/netflix|spotify|movie|entertain/.test(l))return'Entertainment';
