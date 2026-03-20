@@ -146,34 +146,51 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <button class="mnb" onclick="shiftMonth(-1)">‹</button>
     <span class="month-label" id="monthLabel" onclick="openPicker()">JAN 2025</span>
     <button class="mnb" onclick="shiftMonth(1)">›</button>
+    <button class="mnb" onclick="fetchFromSheets()" title="Reload from Sheets" style="font-size:13px">↻</button>
     <button class="mnb" onclick="clearAllData()" title="Clear all data" style="color:var(--red);font-size:13px">🗑</button>
-    <button class="mnb" onclick="document.getElementById('gsBanner').style.display='flex'" title="Google Sheets settings" style="font-size:13px">⚙️</button>
+    <button class="mnb" onclick="openGsSettings()" title="Google Sheets settings" style="font-size:13px">⚙️</button>
   </div>
 </div>
 
-<!-- GOOGLE SHEETS SETUP BANNER -->
-<div id="gsBanner" style="display:none;background:linear-gradient(135deg,#1a2a1a,#1a1a2a);border-bottom:1px solid var(--border);padding:14px 16px;flex-direction:column;gap:10px">
-  <div style="display:flex;align-items:center;gap:8px">
-    <span style="font-size:18px">📊</span>
-    <div>
-      <div style="font-size:13px;font-weight:600;color:var(--text)">Connect Google Sheets</div>
-      <div style="font-size:11px;color:var(--muted)">Sync your data to your spreadsheet — only you can access it</div>
+<!-- GOOGLE SHEETS SETTINGS MODAL -->
+<div class="overlay" id="gsOverlay" onclick="closeGsSettings(event)">
+  <div class="sheet">
+    <div class="sh-title">
+      Google Sheets Sync
+      <button class="sh-close" onclick="closeGsSettings()">×</button>
     </div>
-  </div>
-  <input id="gsUrlInput" class="fi" placeholder="Apps Script URL — https://script.google.com/macros/s/.../exec" style="font-size:11px;font-family:'DM Mono',monospace" />
-  <div style="display:flex;gap:8px">
-    <input id="gsTokenInput" class="fi" placeholder="Your secret token (e.g. mango-river-42)" style="font-size:11px;font-family:'DM Mono',monospace" />
-    <button class="btn btn-p btn-sm" onclick="saveGsUrl()" style="white-space:nowrap">Connect</button>
-    <button id="testBtn" class="btn btn-g btn-sm" onclick="testConnection()" style="white-space:nowrap">Test</button>
-  </div>
-  <div id="testOut" style="font-size:11px;font-family:'DM Mono',monospace;min-height:16px"></div>
-  <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.8;background:rgba(255,255,255,.04);padding:10px;border-radius:8px">
-    <b style="color:var(--accent)">Setup steps:</b><br>
-    1. Google Sheet → Extensions → Apps Script<br>
-    2. Paste code from <b style="color:var(--accent)">google_apps_script.js</b> → set your token → Save<br>
-    3. Deploy → New deployment → Web app<br>
-    &nbsp;&nbsp;&nbsp;Execute as: <b style="color:var(--text)">Me</b> &nbsp;·&nbsp; Who has access: <b style="color:var(--text)">Anyone</b><br>
-    4. Copy the /exec URL → paste above with your token
+
+    <!-- Status row -->
+    <div id="gsStatusRow" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:10px;background:var(--surface2);border-radius:10px">
+      <span id="gsStatusDot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0"></span>
+      <span id="gsStatusText" style="font-size:12px;font-family:'DM Mono',monospace;color:var(--muted)">Not connected</span>
+      <button onclick="clearGsUrl()" style="margin-left:auto;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer;font-family:'DM Mono',monospace" id="gsDisconnectBtn">Disconnect</button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">Apps Script URL</label>
+      <input id="gsUrlInput" class="fi" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:11px;font-family:'DM Mono',monospace" />
+      <label style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">Secret Token</label>
+      <input id="gsTokenInput" class="fi" type="password" placeholder="Your secret token" style="font-size:11px;font-family:'DM Mono',monospace" />
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-g btn-sm" onclick="runTest()" style="flex:1">🔌 Test</button>
+      <button class="btn btn-g btn-sm" onclick="runDiagnose()" style="flex:1">🔍 Diagnose</button>
+      <button class="btn btn-p btn-sm" onclick="saveGsUrl()" style="flex:1">Connect</button>
+    </div>
+
+    <div id="testOut" style="font-size:11px;font-family:'DM Mono',monospace;margin-top:10px;min-height:16px"></div>
+    <div id="gsDebug" style="display:none;font-size:10px;font-family:'DM Mono',monospace;line-height:1.5;margin-top:8px;padding:10px;background:rgba(0,0,0,.4);border-radius:8px;word-break:break-all;white-space:pre-wrap;max-height:200px;overflow-y:auto"></div>
+
+    <div style="margin-top:14px;padding:10px;background:var(--surface2);border-radius:10px;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.8">
+      <b style="color:var(--accent)">First time setup:</b><br>
+      1. Google Sheet → Extensions → Apps Script<br>
+      2. Paste <b style="color:var(--text)">google_apps_script.js</b> → set token → Save<br>
+      3. Deploy → New deployment → Web app<br>
+      &nbsp;&nbsp;&nbsp;Execute as: <b style="color:var(--text)">Me</b> · Who has access: <b style="color:var(--text)">Anyone</b><br>
+      4. Copy /exec URL → paste above → Connect
+    </div>
   </div>
 </div>
 <div class="overlay" id="moOverlay" onclick="closePicker(event)">
@@ -370,33 +387,64 @@ const LS_KEY = 'budgetapp_v1';
 let GS_URL   = localStorage.getItem('budgetapp_gsurl')   || '';
 let GS_TOKEN = localStorage.getItem('budgetapp_gstoken') || '';
 
-// Show the URL setup banner if not configured
-function checkGsSetup() {
-  const banner = document.getElementById('gsBanner');
-  if (!GS_URL || !GS_TOKEN) { banner.style.display = 'flex'; }
-  else { banner.style.display = 'none'; }
+// Show the settings modal, pre-filling any saved values
+function openGsSettings() {
+  document.getElementById('gsUrlInput').value   = GS_URL   || '';
+  document.getElementById('gsTokenInput').value = GS_TOKEN || '';
+  document.getElementById('testOut').textContent = '';
+  document.getElementById('gsDebug').style.display = 'none';
+  updateGsStatusRow();
+  document.getElementById('gsOverlay').classList.add('open');
 }
+function closeGsSettings(e) {
+  if (!e || e.target === document.getElementById('gsOverlay'))
+    document.getElementById('gsOverlay').classList.remove('open');
+}
+function updateGsStatusRow() {
+  const dot  = document.getElementById('gsStatusDot');
+  const text = document.getElementById('gsStatusText');
+  const disc = document.getElementById('gsDisconnectBtn');
+  if (GS_URL && GS_TOKEN) {
+    dot.style.background  = 'var(--accent)';
+    text.style.color      = 'var(--accent)';
+    text.textContent      = '● Connected — ' + GS_URL.slice(0,40) + '…';
+    disc.style.display    = 'inline';
+  } else {
+    dot.style.background  = 'var(--muted)';
+    text.style.color      = 'var(--muted)';
+    text.textContent      = 'Not connected';
+    disc.style.display    = 'none';
+  }
+}
+function checkGsSetup() { updateGsStatusRow(); }
+
 function saveGsUrl() {
   const url = document.getElementById('gsUrlInput').value.trim();
   const tok = document.getElementById('gsTokenInput').value.trim();
   if (!url.startsWith('https://script.google.com')) {
-    alert('That doesn\'t look like an Apps Script URL.\nIt should start with https://script.google.com/macros/s/...');
+    setTestOut('✕ URL should start with https://script.google.com/macros/s/...', 'var(--red)');
     return;
   }
-  if (!tok) { alert('Please enter your secret token.'); return; }
+  if (!tok) { setTestOut('✕ Please enter your secret token.', 'var(--red)'); return; }
   GS_URL   = url;
   GS_TOKEN = tok;
   localStorage.setItem('budgetapp_gsurl',   GS_URL);
   localStorage.setItem('budgetapp_gstoken', GS_TOKEN);
-  document.getElementById('gsBanner').style.display = 'none';
-  setSyncStatus('syncing');
-  fetchFromSheets();
+  updateGsStatusRow();
+  setTestOut('✓ Saved! Fetching data…', 'var(--accent)');
+  fetchFromSheets().then(() => closeGsSettings());
 }
 function clearGsUrl() {
+  if (!confirm('Disconnect from Google Sheets?')) return;
   localStorage.removeItem('budgetapp_gsurl');
   localStorage.removeItem('budgetapp_gstoken');
   GS_URL = ''; GS_TOKEN = '';
-  checkGsSetup();
+  updateGsStatusRow();
+}
+function setTestOut(msg, color) {
+  const el = document.getElementById('testOut');
+  el.textContent = msg;
+  el.style.color = color || 'var(--text)';
 }
 
 // ---- Sync status indicator ----
@@ -449,7 +497,40 @@ async function fetchFromSheets() {
     const text = await res.text();
     const data = JSON.parse(text);
     if (data.error) throw new Error(data.error);
-    if (data.allTxns && Object.keys(data.allTxns).length) allTxns = data.allTxns;
+
+    // Normalise month keys — sheet may have stored "2025-1" instead of "2025-01"
+    if (data.allTxns) {
+      const normalised = {};
+      Object.entries(data.allTxns).forEach(([key, txns]) => {
+        // Ensure format is YYYY-MM (zero-pad the month)
+        const parts = String(key).split('-');
+        const normKey = parts.length === 2
+          ? `${parts[0]}-${parts[1].padStart(2,'0')}`
+          : key;
+        normalised[normKey] = txns;
+      });
+      data.allTxns = normalised;
+    }
+
+    const txnKeys = data.allTxns ? Object.keys(data.allTxns) : [];
+    const txnCount = txnKeys.reduce((s,k) => s + (data.allTxns[k]||[]).length, 0);
+
+    // Show debug info in the banner
+    const dbg = document.getElementById('gsDebug');
+    if (dbg) {
+      dbg.style.display = 'block';
+      if (txnCount > 0) {
+        dbg.textContent = `✓ Loaded ${txnCount} transactions across: ${txnKeys.join(', ')}`;
+        dbg.style.color = 'var(--accent)';
+      } else {
+        dbg.textContent = `⚠ Connected but sheet returned 0 transactions. Keys found: [${txnKeys.join(', ')||'none'}]. Raw: ${text.slice(0,200)}`;
+        dbg.style.color = 'var(--accent3)';
+      }
+    }
+
+    if (txnCount > 0) {
+      allTxns = data.allTxns;
+    }
     if (data.funds && data.funds.length) {
       funds = data.funds;
       const maxId = funds.reduce((m,f) => Math.max(m, Number(f.id)||0), 0);
@@ -465,6 +546,8 @@ async function fetchFromSheets() {
     renderAll();
     return true;
   } catch(e) {
+    const dbg = document.getElementById('gsDebug');
+    if (dbg) { dbg.style.display='block'; dbg.textContent = '✕ Fetch error: ' + e.message; dbg.style.color='var(--red)'; }
     console.warn('Sheets fetch failed:', e);
     setSyncStatus('error');
     return false;
@@ -475,19 +558,20 @@ let _saveTimer = null;
 function scheduleSave() {
   lsSave();
   clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(pushToSheets, 800);
+  // Only push funds/debts on schedule — transactions go via pushNewRow
+  _saveTimer = setTimeout(() => pushToSheets(true), 800);
 }
 
-// Apps Script blocks POST from external origins — use GET with encoded payload instead
-async function pushToSheets() {
+// Apps Script: use addRow for new transactions, saveData only for funds/debts
+async function pushToSheets(fundsDebtsOnly) {
   if (!GS_URL || !GS_TOKEN) { setSyncStatus('offline'); return; }
   setSyncStatus('syncing');
   try {
-    const payload = encodeURIComponent(JSON.stringify({ allTxns, funds, debts, nextFid, nextDid }));
+    // Always save funds + debts
+    const payload = encodeURIComponent(JSON.stringify({ funds, debts }));
     const url = `${GS_URL}?action=save&token=${encodeURIComponent(GS_TOKEN)}&data=${payload}`;
-    const res = await fetch(url, { method: 'GET', redirect: 'follow' });
-    const text = await res.text();
-    const data = JSON.parse(text);
+    const res = await fetch(url, { method:'GET', redirect:'follow' });
+    const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Save failed');
     lsSave();
     setSyncStatus('saved');
@@ -497,33 +581,68 @@ async function pushToSheets() {
   }
 }
 
-async function testConnection() {
+// Called immediately when a new transaction is added — appends a single row to the sheet
+async function pushNewRow(txn) {
+  if (!GS_URL || !GS_TOKEN) return;
+  try {
+    // Determine month tab name from the transaction date
+    const monthKey = txn.date.slice(0, 7); // "2026-01"
+    const monthNum = parseInt(monthKey.split('-')[1]) - 1;
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const tabName = MONTH_NAMES[monthNum];
+    const isIncome = txn.type === 'Income';
+    const rowData = {
+      tabName,
+      type: isIncome ? 'income' : 'expense',
+      date: txn.date,
+      amount: Math.abs(txn.amount),
+      desc: txn.desc,
+      category: txn.category,
+      txnType: txn.type,
+    };
+    const payload = encodeURIComponent(JSON.stringify(rowData));
+    const url = `${GS_URL}?action=addRow&token=${encodeURIComponent(GS_TOKEN)}&data=${payload}`;
+    await fetch(url, { method:'GET', redirect:'follow' });
+    setSyncStatus('saved');
+  } catch(e) {
+    console.warn('addRow failed:', e);
+    setSyncStatus('error');
+  }
+}
+
+async function runDiagnose() {
   const url = document.getElementById('gsUrlInput').value.trim() || GS_URL;
   const tok = document.getElementById('gsTokenInput').value.trim() || GS_TOKEN;
-  const btn = document.getElementById('testBtn');
-  const out = document.getElementById('testOut');
-  if (!url) { out.textContent = '✕ No URL entered.'; out.style.color = 'var(--red)'; return; }
-  btn.textContent = 'Testing…'; out.textContent = '';
+  const dbg = document.getElementById('gsDebug');
+  setTestOut('Running diagnosis…', 'var(--accent2)');
   try {
-    const res = await fetch(`${url}?action=ping&token=${encodeURIComponent(tok)}`, { method: 'GET', redirect: 'follow' });
-    const text = await res.text();
-    let parsed;
-    try { parsed = JSON.parse(text); } catch(_) { parsed = null; }
-    if (parsed && parsed.ok) {
-      out.textContent = '✓ Connected! Token accepted.';
-      out.style.color = 'var(--accent)';
-    } else if (parsed && parsed.error === 'Unauthorized') {
-      out.textContent = '✕ Wrong token — check it matches your Apps Script.';
-      out.style.color = 'var(--red)';
-    } else {
-      out.textContent = '✕ Got unexpected response: ' + text.slice(0, 120);
-      out.style.color = 'var(--red)';
+    const res = await fetch(`${url}?action=diagnose&token=${encodeURIComponent(tok)}`, { method:'GET', redirect:'follow' });
+    const data = await res.json();
+    if (data.error) { setTestOut('✕ ' + data.error, 'var(--red)'); return; }
+    setTestOut('Tabs: ' + (data.tabs||[]).join(', '), 'var(--accent2)');
+    if (data.rows && data.rows.length) {
+      dbg.style.display = 'block';
+      dbg.textContent = 'Headers (row 6) of "' + data.diagTab + '":\n' +
+        (data.headers||[]).map(h=>`${h.col}: "${h.val}"`).join(' | ') + '\n\nFirst data rows:\n' +
+        data.rows.map(r => 'Row ' + r.rowNum + ': ' + r.cols.map(c=>`${c.col}="${c.val}"`).join(' | ')).join('\n');
+      dbg.style.color = 'var(--accent2)';
     }
-  } catch(e) {
-    out.textContent = '✕ Network error: ' + e.message;
-    out.style.color = 'var(--red)';
-  }
-  btn.textContent = 'Test';
+  } catch(e) { setTestOut('✕ ' + e.message, 'var(--red)'); }
+}
+
+async function runTest() {
+  const url = document.getElementById('gsUrlInput').value.trim() || GS_URL;
+  const tok = document.getElementById('gsTokenInput').value.trim() || GS_TOKEN;
+  if (!url) { setTestOut('✕ Enter a URL first.', 'var(--red)'); return; }
+  setTestOut('Testing…', 'var(--accent2)');
+  try {
+    const res = await fetch(`${url}?action=ping&token=${encodeURIComponent(tok)}`, { method:'GET', redirect:'follow' });
+    const text = await res.text();
+    let parsed; try { parsed = JSON.parse(text); } catch(_) { parsed = null; }
+    if (parsed && parsed.ok)                       setTestOut('✓ Connected! Token accepted.', 'var(--accent)');
+    else if (parsed && parsed.error==='Unauthorized') setTestOut('✕ Wrong token — must match SECRET_TOKEN in Apps Script.', 'var(--red)');
+    else                                           setTestOut('✕ Unexpected: ' + text.slice(0,120), 'var(--red)');
+  } catch(e) { setTestOut('✕ Network error: ' + e.message, 'var(--red)'); }
 }
 
 function clearAllData() {
@@ -654,7 +773,10 @@ function addTxn(){
   const date=document.getElementById('tDate').value||`${vY}-${p(vM+1)}-01`;
   if(!desc||isNaN(amt)){alert('Fill in description and amount.');return;}
   const signed=type==='Income'?Math.abs(amt):-Math.abs(amt);
-  const txns=gt();txns.push({id:Date.now(),desc,amount:signed,category:cat,type,date});st(txns);
+  const newTxn={id:Date.now(),desc,amount:signed,category:cat,type,date};
+  const txns=gt();txns.push(newTxn);st(txns);
+  // Push new row to Google Sheet immediately
+  pushNewRow(newTxn);
   document.getElementById('tDesc').value='';document.getElementById('tAmt').value='';
   closeAForm();renderAll();
 }
@@ -804,8 +926,7 @@ function nav(id,btn){
 const hasLocal = lsLoad();
 if (!hasLocal) seedDemo();
 updLabel(); setDateDef(); renderAll();
-checkGsSetup();
-// If fully configured, fetch fresh data from Sheets in background
+updateGsStatusRow();
 if (GS_URL && GS_TOKEN) fetchFromSheets();
 </script>
 </body>
