@@ -747,12 +747,11 @@ function renderDonut(txns,total){
   document.getElementById('dLegend').innerHTML=ents.map(([t,v])=>`<div class="li"><span class="ldot" style="background:${TC[t]||'#888'}"></span><span class="llbl">${t}</span><span class="lpct">${((v/gr)*100).toFixed(1)}%</span></div>`).join('');
 }
 function renderBudget(txns, budget){
-  // Build actuals map — normalise category names
+  // Build actuals — only match exact category names, treat Miscellaneous as Misc
   const act={};
-  const knownCats = new Set(budget.map(b=>b.name));
   txns.forEach(t=>{
-    if(t.amount>=0) return; // skip income
-    const cat = knownCats.has(t.category) ? t.category : 'Misc';
+    if(t.amount>=0) return;
+    const cat = (t.category==='Miscellaneous') ? 'Misc' : t.category;
     act[cat]=(act[cat]||0)+Math.abs(t.amount);
   });
 
