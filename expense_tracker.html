@@ -89,8 +89,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .tr2{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .tamt{font-family:'DM Mono',monospace;font-size:13px;font-weight:500}
 .ttag{font-size:10px;padding:2px 6px;border-radius:8px;font-family:'DM Mono',monospace}
-.tdel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 0 0 4px;opacity:0;transition:opacity .15s}
+.tdel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px 6px;opacity:0;transition:opacity .15s;flex-shrink:0}
 .ti:hover .tdel{opacity:1}
+@media (hover:none){.tdel{opacity:.5}}
 /* SAVINGS */
 .gi{margin-bottom:10px;background:var(--surface2);border-radius:12px;padding:12px}
 .gh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
@@ -293,7 +294,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="aform" id="aForm">
     <div class="fr"><input class="fi" id="tDesc" placeholder="Description" /><input class="fi" id="tAmt" type="number" placeholder="Amount" style="max-width:90px"></div>
     <div class="fr">
-      <select class="fs" id="tCat"><option>Food & Drink</option><option>Groceries</option><option>Transportation</option><option>Rent/Utilities</option><option>Health</option><option>Shopping</option><option>Entertainment</option><option>Savings</option><option>Debt</option><option>Income</option><option>Misc</option><option>Other</option></select>
+      <select class="fs" id="tCat"><option>Food & Drink</option><option>Groceries</option><option>Transportation</option><option>Rent/Utilities</option><option>Health</option><option>Shopping</option><option>Entertainment</option><option>Savings</option><option>Debt</option><option>Income</option><option>Misc</option><option>Gifts</option><option>Other</option></select>
       <select class="fs" id="tType"><option>Need</option><option>Want</option><option>Savings</option><option>Debt</option><option>Income</option></select>
     </div>
     <div class="fr">
@@ -349,7 +350,7 @@ const MOLONG=['January','February','March','April','May','June','July','August',
 const CATS={
   'Food & Drink':'🍔','Groceries':'🛒','Transportation':'🚗','Rent/Utilities':'🏠',
   'Health':'💊','Shopping':'🛍','Entertainment':'🎬','Savings':'💰',
-  'Debt':'💳','Income':'💵','Misc':'📦','Other':'📦'
+  'Debt':'💳','Income':'💵','Misc':'📦','Miscellaneous':'📦','Other':'📦','Gifts':'🎁'
 };
 const TC={'Need':'#7ab8f0','Want':'#c8a8f0','Savings':'#c8f07a','Debt':'#f07a7a','Income':'#7af0a8'};
 const BUDGET=[
@@ -498,8 +499,14 @@ async function fetchFromSheets() {
     const data = JSON.parse(text);
     if (data.error) throw new Error(data.error);
 
-    // Normalise month keys — sheet may have stored "2025-1" instead of "2025-01"
+    // Normalise categories from sheet to app values
     if (data.allTxns) {
+      Object.values(data.allTxns).forEach(txns => {
+        txns.forEach(t => {
+          if(t.category) t.category = normCat(t.category);
+        });
+      });
+    }
       const normalised = {};
       Object.entries(data.allTxns).forEach(([key, txns]) => {
         // Ensure format is YYYY-MM (zero-pad the month)
@@ -754,11 +761,58 @@ function renderTxns(){
   if(!fil.length){el.innerHTML=`<div class="empty"><div class="eico">🗒️</div>No transactions for ${MOLONG[vM]}.<br>Tap + to add or ⬆ CSV to import.</div>`;return;}
   el.innerHTML=[...fil].sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{
     const ic=CATS[t.category]||'📦',inc=t.amount>0,tc=TC[t.type]||'#888';
-    return`<div class="ti"><div class="tic" style="background:${tc}22">${ic}</div><div class="td"><div class="tdesc">${esc(t.desc)}</div><div class="tmeta">${esc(t.category)} · ${t.date}</div></div><div class="tr2"><div class="tamt" style="color:${inc?'var(--green)':'var(--text)'}">${inc?'+':''}${fmt(t.amount)}</div><div class="ttag" style="background:${tc}22;color:${tc}">${t.type}</div></div><button class="tdel" onclick="delTxn(${t.id})">×</button></div>`;
+    const safeId=esc(String(t.id));
+    return`<div class="ti">
+      <div class="tic" style="background:${tc}22">${ic}</div>
+      <div class="td">
+        <div class="tdesc">${esc(t.desc)}</div>
+        <div class="tmeta">${esc(t.category)} · ${t.date}</div>
+      </div>
+      <div class="tr2">
+        <div class="tamt" style="color:${inc?'var(--green)':'var(--text)'}">${inc?'+':''}${fmt(t.amount)}</div>
+        <div class="ttag" style="background:${tc}22;color:${tc}">${t.type}</div>
+      </div>
+      <button class="tdel" onclick="delTxn('${safeId}')" title="Delete">🗑</button>
+    </div>`;
   }).join('');
 }
 function filt(btn,type){document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');txFilt=type;renderTxns();}
-function delTxn(id){st(gt().filter(t=>t.id!==id));renderAll();}
+
+function delTxn(idStr){
+  // IDs can be numeric (locally added) or string (from Sheets like "t-2026-01-5")
+  const txns = gt();
+  const txn = txns.find(t => String(t.id) === String(idStr));
+  if (!txn) return;
+  if (!confirm(`Delete "${txn.desc}"?`)) return;
+  st(txns.filter(t => String(t.id) !== String(idStr)));
+  // Delete from Google Sheet if connected
+  deleteRowFromSheet(txn);
+  renderAll();
+}
+
+async function deleteRowFromSheet(txn) {
+  if (!GS_URL || !GS_TOKEN) return;
+  try {
+    const monthNum = parseInt(txn.date.slice(5,7)) - 1;
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const rowData = {
+      tabName: MONTH_NAMES[monthNum],
+      type: txn.type === 'Income' ? 'income' : 'expense',
+      date: txn.date,
+      amount: Math.abs(txn.amount),
+      desc: txn.desc,
+      category: txn.category,
+    };
+    const payload = encodeURIComponent(JSON.stringify(rowData));
+    const url = `${GS_URL}?action=deleteRow&token=${encodeURIComponent(GS_TOKEN)}&data=${payload}`;
+    const res = await fetch(url, { method:'GET', redirect:'follow' });
+    const data = await res.json();
+    if (data.ok) setSyncStatus('saved');
+    else console.warn('deleteRow response:', data);
+  } catch(e) {
+    console.warn('deleteRow failed:', e);
+  }
+}
 function toggleAForm(){
   afOpen=!afOpen;
   document.getElementById('aForm').classList.toggle('open',afOpen);
@@ -824,6 +878,7 @@ function doImport(){
   const ci=document.getElementById('mCat').value;
   if(isNaN(di)||isNaN(dsi)||isNaN(ai)){alert('Map Date, Description, and Amount.');return;}
   const txns=gt();let cnt=0,skip=0;
+  const newTxns=[];
   csvRows.forEach(row=>{
     const rawD=row[di]||'',desc=(row[dsi]||'').trim();
     const rawA=(row[ai]||'').replace(/[$,\s]/g,''),amt=parseFloat(rawA);
@@ -832,12 +887,29 @@ function doImport(){
     const dm=rawD.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
     if(dm){const y=dm[3].length===2?'20'+dm[3]:dm[3];date=`${y}-${dm[1].padStart(2,'0')}-${dm[2].padStart(2,'0')}`;}
     const rawCat=ci!==''?(row[parseInt(ci)]||'Other'):'Other';
-    const category=guessCat(rawCat),type=amt>0?'Income':guessType(category);
-    txns.push({id:Date.now()+cnt,desc,amount:amt,category,type,date});cnt++;
+    const category=normCat(guessCat(rawCat)),type=amt>0?'Income':guessType(category);
+    const t={id:Date.now()+cnt,desc,amount:amt,category,type,date};
+    txns.push(t);newTxns.push(t);cnt++;
   });
   st(txns);
+  // Push each new row to Sheets
+  if(GS_URL&&GS_TOKEN) newTxns.forEach(t=>pushNewRow(t));
   document.getElementById('iStat').textContent=`✓ Imported ${cnt} transactions${skip?' ('+skip+' skipped)':''}`;
   setTimeout(()=>{closeCSV();renderAll();},1300);
+}
+
+
+// Normalise category names from sheet/CSV to match app's expected values
+function normCat(c){
+  const m={
+    'miscellaneous':'Misc','misc':'Misc','other':'Other',
+    'food':'Food & Drink','food and drink':'Food & Drink','food & drink':'Food & Drink',
+    'transport':'Transportation','transportation':'Transportation',
+    'rent':'Rent/Utilities','utilities':'Rent/Utilities','rent/utilities':'Rent/Utilities',
+    'health':'Health','shopping':'Shopping','entertainment':'Entertainment',
+    'savings':'Savings','debt':'Debt','income':'Income','groceries':'Groceries',
+  };
+  return m[(c||'').toLowerCase().trim()]||c||'Other';
 }
 function guessCat(r){
   const l=(r||'').toLowerCase();
