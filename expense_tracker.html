@@ -499,22 +499,16 @@ async function fetchFromSheets() {
     const data = JSON.parse(text);
     if (data.error) throw new Error(data.error);
 
-    // Normalise categories from sheet to app values
+    // Normalise month keys and categories from sheet
     if (data.allTxns) {
-      Object.values(data.allTxns).forEach(txns => {
-        txns.forEach(t => {
-          if(t.category) t.category = normCat(t.category);
-        });
-      });
-    }
       const normalised = {};
       Object.entries(data.allTxns).forEach(([key, txns]) => {
-        // Ensure format is YYYY-MM (zero-pad the month)
         const parts = String(key).split('-');
-        const normKey = parts.length === 2
-          ? `${parts[0]}-${parts[1].padStart(2,'0')}`
-          : key;
-        normalised[normKey] = txns;
+        const normKey = parts.length === 2 ? `${parts[0]}-${parts[1].padStart(2,'0')}` : key;
+        normalised[normKey] = txns.map(t => ({
+          ...t,
+          category: normCat(t.category || 'Other')
+        }));
       });
       data.allTxns = normalised;
     }
@@ -522,22 +516,7 @@ async function fetchFromSheets() {
     const txnKeys = data.allTxns ? Object.keys(data.allTxns) : [];
     const txnCount = txnKeys.reduce((s,k) => s + (data.allTxns[k]||[]).length, 0);
 
-    // Show debug info in the banner
-    const dbg = document.getElementById('gsDebug');
-    if (dbg) {
-      dbg.style.display = 'block';
-      if (txnCount > 0) {
-        dbg.textContent = `✓ Loaded ${txnCount} transactions across: ${txnKeys.join(', ')}`;
-        dbg.style.color = 'var(--accent)';
-      } else {
-        dbg.textContent = `⚠ Connected but sheet returned 0 transactions. Keys found: [${txnKeys.join(', ')||'none'}]. Raw: ${text.slice(0,200)}`;
-        dbg.style.color = 'var(--accent3)';
-      }
-    }
-
-    if (txnCount > 0) {
-      allTxns = data.allTxns;
-    }
+    if (txnCount > 0) allTxns = data.allTxns;
     if (data.funds && data.funds.length) {
       funds = data.funds;
       const maxId = funds.reduce((m,f) => Math.max(m, Number(f.id)||0), 0);
@@ -553,8 +532,6 @@ async function fetchFromSheets() {
     renderAll();
     return true;
   } catch(e) {
-    const dbg = document.getElementById('gsDebug');
-    if (dbg) { dbg.style.display='block'; dbg.textContent = '✕ Fetch error: ' + e.message; dbg.style.color='var(--red)'; }
     console.warn('Sheets fetch failed:', e);
     setSyncStatus('error');
     return false;
