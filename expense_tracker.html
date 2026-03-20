@@ -164,7 +164,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div style="display:flex;gap:8px">
     <input id="gsTokenInput" class="fi" placeholder="Your secret token (e.g. mango-river-42)" style="font-size:11px;font-family:'DM Mono',monospace" />
     <button class="btn btn-p btn-sm" onclick="saveGsUrl()" style="white-space:nowrap">Connect</button>
+    <button id="testBtn" class="btn btn-g btn-sm" onclick="testConnection()" style="white-space:nowrap">Test</button>
   </div>
+  <div id="testOut" style="font-size:11px;font-family:'DM Mono',monospace;min-height:16px"></div>
   <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.8;background:rgba(255,255,255,.04);padding:10px;border-radius:8px">
     <b style="color:var(--accent)">Setup steps:</b><br>
     1. Google Sheet → Extensions → Apps Script<br>
@@ -443,13 +445,13 @@ async function fetchFromSheets() {
   if (!GS_URL || !GS_TOKEN) return false;
   setSyncStatus('syncing');
   try {
-    const res = await fetch(`${GS_URL}?action=load&token=${encodeURIComponent(GS_TOKEN)}`, { method: 'GET' });
-    const data = await res.json();
+    const res = await fetch(`${GS_URL}?action=load&token=${encodeURIComponent(GS_TOKEN)}`, { method: 'GET', redirect: 'follow' });
+    const text = await res.text();
+    const data = JSON.parse(text);
     if (data.error) throw new Error(data.error);
-    if (data.allTxns) allTxns = data.allTxns;
+    if (data.allTxns && Object.keys(data.allTxns).length) allTxns = data.allTxns;
     if (data.funds && data.funds.length) {
       funds = data.funds;
-      // Recompute nextFid from loaded data
       const maxId = funds.reduce((m,f) => Math.max(m, Number(f.id)||0), 0);
       if (maxId >= nextFid) nextFid = maxId + 1;
     }
@@ -458,7 +460,7 @@ async function fetchFromSheets() {
       const maxId = debts.reduce((m,d) => Math.max(m, Number(d.id)||0), 0);
       if (maxId >= nextDid) nextDid = maxId + 1;
     }
-    lsSave(); // update local cache
+    lsSave();
     setSyncStatus('saved');
     renderAll();
     return true;
@@ -471,20 +473,21 @@ async function fetchFromSheets() {
 
 let _saveTimer = null;
 function scheduleSave() {
-  lsSave(); // immediate local save
+  lsSave();
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(pushToSheets, 800);
 }
 
+// Apps Script blocks POST from external origins — use GET with encoded payload instead
 async function pushToSheets() {
   if (!GS_URL || !GS_TOKEN) { setSyncStatus('offline'); return; }
   setSyncStatus('syncing');
   try {
-    const res = await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'save', token: GS_TOKEN, data: { allTxns, funds, debts, nextFid, nextDid } })
-    });
-    const data = await res.json();
+    const payload = encodeURIComponent(JSON.stringify({ allTxns, funds, debts, nextFid, nextDid }));
+    const url = `${GS_URL}?action=save&token=${encodeURIComponent(GS_TOKEN)}&data=${payload}`;
+    const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+    const text = await res.text();
+    const data = JSON.parse(text);
     if (!data.ok) throw new Error(data.error || 'Save failed');
     lsSave();
     setSyncStatus('saved');
@@ -492,6 +495,35 @@ async function pushToSheets() {
     console.warn('Sheets push failed:', e);
     setSyncStatus('error');
   }
+}
+
+async function testConnection() {
+  const url = document.getElementById('gsUrlInput').value.trim() || GS_URL;
+  const tok = document.getElementById('gsTokenInput').value.trim() || GS_TOKEN;
+  const btn = document.getElementById('testBtn');
+  const out = document.getElementById('testOut');
+  if (!url) { out.textContent = '✕ No URL entered.'; out.style.color = 'var(--red)'; return; }
+  btn.textContent = 'Testing…'; out.textContent = '';
+  try {
+    const res = await fetch(`${url}?action=ping&token=${encodeURIComponent(tok)}`, { method: 'GET', redirect: 'follow' });
+    const text = await res.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch(_) { parsed = null; }
+    if (parsed && parsed.ok) {
+      out.textContent = '✓ Connected! Token accepted.';
+      out.style.color = 'var(--accent)';
+    } else if (parsed && parsed.error === 'Unauthorized') {
+      out.textContent = '✕ Wrong token — check it matches your Apps Script.';
+      out.style.color = 'var(--red)';
+    } else {
+      out.textContent = '✕ Got unexpected response: ' + text.slice(0, 120);
+      out.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    out.textContent = '✕ Network error: ' + e.message;
+    out.style.color = 'var(--red)';
+  }
+  btn.textContent = 'Test';
 }
 
 function clearAllData() {
