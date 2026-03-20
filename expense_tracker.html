@@ -353,13 +353,34 @@ const CATS={
   'Debt':'💳','Income':'💵','Misc':'📦','Miscellaneous':'📦','Other':'📦','Gifts':'🎁'
 };
 const TC={'Need':'#7ab8f0','Want':'#c8a8f0','Savings':'#c8f07a','Debt':'#f07a7a','Income':'#7af0a8'};
-const BUDGET=[
-  {name:'Food & Drink',planned:400,color:'#c8f07a'},{name:'Rent/Utilities',planned:1200,color:'#7ab8f0'},
-  {name:'Transportation',planned:200,color:'#f0c87a'},{name:'Groceries',planned:300,color:'#a8f0c8'},
-  {name:'Health',planned:100,color:'#f0a8c8'},{name:'Shopping',planned:150,color:'#c8a8f0'},
-  {name:'Entertainment',planned:80,color:'#f07aa8'},{name:'Debt',planned:650,color:'#f07a7a'},
-  {name:'Misc',planned:120,color:'#aaa'}
+
+// Default budget template — used as fallback for any month not yet customised
+const BUDGET_DEFAULTS=[
+  {name:'Food & Drink',planned:400,color:'#c8f07a'},
+  {name:'Rent/Utilities',planned:1200,color:'#7ab8f0'},
+  {name:'Transportation',planned:200,color:'#f0c87a'},
+  {name:'Groceries',planned:300,color:'#a8f0c8'},
+  {name:'Health',planned:100,color:'#f0a8c8'},
+  {name:'Shopping',planned:150,color:'#c8a8f0'},
+  {name:'Entertainment',planned:80,color:'#f07aa8'},
+  {name:'Debt',planned:650,color:'#f07a7a'},
+  {name:'Misc',planned:120,color:'#aaa'},
 ];
+
+// Per-month budgets stored as { "2026-03": [{name,planned,color}, ...] }
+let monthBudgets = {};
+
+// Get budget for current month — falls back to defaults
+function getBudget() {
+  const k = ck();
+  if (monthBudgets[k]) return monthBudgets[k];
+  // Copy defaults so each month is independent
+  return BUDGET_DEFAULTS.map(b => ({...b}));
+}
+function setBudget(arr) {
+  monthBudgets[ck()] = arr;
+  lsSave();
+}
 
 let allTxns={};
 let funds=[
@@ -472,7 +493,7 @@ function setSyncStatus(state) {
 // ---- localStorage (always written as fast local cache) ----
 function lsSave() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ allTxns, funds, debts, nextFid, nextDid, savedAt: Date.now() }));
+    localStorage.setItem(LS_KEY, JSON.stringify({ allTxns, funds, debts, nextFid, nextDid, monthBudgets, savedAt: Date.now() }));
   } catch(e) {}
 }
 function lsLoad() {
@@ -485,6 +506,7 @@ function lsLoad() {
     if (d.debts) debts = d.debts;
     if (d.nextFid) nextFid = d.nextFid;
     if (d.nextDid) nextDid = d.nextDid;
+    if (d.monthBudgets) monthBudgets = d.monthBudgets;
     return true;
   } catch(e) { return false; }
 }
@@ -689,20 +711,22 @@ function renderAll(){renderOv();renderTxns();renderSavings();renderDebt();}
 // Overview
 function renderOv(){
   const txns=gt();
+  const budget=getBudget();
   const income=txns.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
   const spent=txns.filter(t=>t.amount<0&&t.type!=='Savings'&&t.type!=='Debt').reduce((s,t)=>s+Math.abs(t.amount),0);
   const sav=txns.filter(t=>t.type==='Savings').reduce((s,t)=>s+Math.abs(t.amount),0);
   const total=txns.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0);
   const net=income-total;
-  document.getElementById('s-plan').textContent=fp(2500);
+  const planned=budget.reduce((s,b)=>s+b.planned,0);
+  document.getElementById('s-plan').textContent=fp(planned);
   document.getElementById('s-act').textContent=fp(spent);
-  const df=2500-spent,dd=document.getElementById('s-dif');
+  const df=planned-spent,dd=document.getElementById('s-dif');
   dd.textContent=(df>=0?'▼ ':'▲ ')+fp(Math.abs(df))+(df>=0?' under':' over');
   dd.className='ss '+(df>=0?'pos':'neg');
   document.getElementById('s-inc').textContent=fp(income);
   document.getElementById('s-net').textContent='net '+(net>=0?'+':'')+fmt(net);
   document.getElementById('s-sav').textContent=fp(sav);
-  renderDonut(txns,total); renderBudget(txns);
+  renderDonut(txns,total); renderBudget(txns,budget);
 }
 function renderDonut(txns,total){
   document.getElementById('dTotal').textContent=fp(total);
@@ -722,12 +746,45 @@ function renderDonut(txns,total){
   });
   document.getElementById('dLegend').innerHTML=ents.map(([t,v])=>`<div class="li"><span class="ldot" style="background:${TC[t]||'#888'}"></span><span class="llbl">${t}</span><span class="lpct">${((v/gr)*100).toFixed(1)}%</span></div>`).join('');
 }
-function renderBudget(txns){
-  const act={};txns.forEach(t=>{if(t.amount<0)act[t.category]=(act[t.category]||0)+Math.abs(t.amount);});
-  document.getElementById('budRows').innerHTML=BUDGET.map(c=>{
-    const a=act[c.name]||0,df=c.planned-a,pct=Math.min(100,c.planned>0?(a/c.planned)*100:0),ov=pct>=100;
-    return`<div class="br"><div class="br-top"><span style="font-size:13px">${c.name}</span><span style="font-family:'DM Mono',monospace;font-size:11px;color:${df>=0?'var(--green)':'var(--red)'}">${df>=0?'+':'-'}$${Math.abs(df).toFixed(0)}</span></div><div class="br-bar"><div class="br-fill" style="width:${pct}%;background:${ov?'var(--red)':c.color}"></div></div><div class="br-bot"><span class="brsub">Plan: ${fp(c.planned)}</span><span class="brsub">${fp(a)}</span></div></div>`;
+function renderBudget(txns, budget){
+  // Build actuals map — normalise category names
+  const act={};
+  const knownCats = new Set(budget.map(b=>b.name));
+  txns.forEach(t=>{
+    if(t.amount>=0) return; // skip income
+    const cat = knownCats.has(t.category) ? t.category : 'Misc';
+    act[cat]=(act[cat]||0)+Math.abs(t.amount);
+  });
+
+  document.getElementById('budRows').innerHTML=budget.map((c,idx)=>{
+    const a=act[c.name]||0,df=c.planned-a;
+    const pct=Math.min(100,c.planned>0?(a/c.planned)*100:0),ov=pct>=100;
+    return`<div class="br">
+      <div class="br-top">
+        <span style="font-size:13px">${c.name}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:${df>=0?'var(--green)':'var(--red)'}">${df>=0?'+':'-'}$${Math.abs(df).toFixed(0)}</span>
+      </div>
+      <div class="br-bar"><div class="br-fill" style="width:${pct}%;background:${ov?'var(--red)':c.color}"></div></div>
+      <div class="br-bot">
+        <span class="brsub" style="cursor:pointer;text-decoration:underline dotted;color:var(--accent2)" onclick="editBudgetLine(${idx})" title="Tap to edit planned amount">Plan: ${fp(c.planned)} ✏️</span>
+        <span class="brsub" style="color:var(--text)">${fp(a)}</span>
+      </div>
+    </div>`;
   }).join('');
+}
+
+function editBudgetLine(idx){
+  const budget = getBudget();
+  const cat = budget[idx];
+  const val = prompt(`Set planned budget for ${cat.name}:`, cat.planned);
+  if(val===null) return;
+  const num = parseFloat(val);
+  if(isNaN(num)||num<0){alert('Please enter a valid amount.');return;}
+  // Copy defaults into monthBudgets if not already set for this month
+  if(!monthBudgets[ck()]) monthBudgets[ck()] = getBudget().map(b=>({...b}));
+  monthBudgets[ck()][idx].planned = num;
+  setBudget(monthBudgets[ck()]);
+  renderOv();
 }
 
 // Transactions
