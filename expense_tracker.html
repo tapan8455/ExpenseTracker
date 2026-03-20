@@ -157,17 +157,21 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <span style="font-size:18px">📊</span>
     <div>
       <div style="font-size:13px;font-weight:600;color:var(--text)">Connect Google Sheets</div>
-      <div style="font-size:11px;color:var(--muted)">Paste your Apps Script URL to sync data to your spreadsheet</div>
+      <div style="font-size:11px;color:var(--muted)">Sync your data to your spreadsheet — only you can access it</div>
     </div>
   </div>
+  <input id="gsUrlInput" class="fi" placeholder="Apps Script URL — https://script.google.com/macros/s/.../exec" style="font-size:11px;font-family:'DM Mono',monospace" />
   <div style="display:flex;gap:8px">
-    <input id="gsUrlInput" class="fi" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:11px;font-family:'DM Mono',monospace" />
+    <input id="gsTokenInput" class="fi" placeholder="Your secret token (e.g. mango-river-42)" style="font-size:11px;font-family:'DM Mono',monospace" />
     <button class="btn btn-p btn-sm" onclick="saveGsUrl()" style="white-space:nowrap">Connect</button>
   </div>
-  <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.6">
-    1. Open your Google Sheet → Extensions → Apps Script<br>
-    2. Paste the code from <b style="color:var(--accent)">google_apps_script.js</b> → Save<br>
-    3. Deploy → New deployment → Web app → Anyone → Copy URL → Paste above
+  <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.8;background:rgba(255,255,255,.04);padding:10px;border-radius:8px">
+    <b style="color:var(--accent)">Setup steps:</b><br>
+    1. Google Sheet → Extensions → Apps Script<br>
+    2. Paste code from <b style="color:var(--accent)">google_apps_script.js</b> → set your token → Save<br>
+    3. Deploy → New deployment → Web app<br>
+    &nbsp;&nbsp;&nbsp;Execute as: <b style="color:var(--text)">Me</b> &nbsp;·&nbsp; Who has access: <b style="color:var(--text)">Anyone</b><br>
+    4. Copy the /exec URL → paste above with your token
   </div>
 </div>
 <div class="overlay" id="moOverlay" onclick="closePicker(event)">
@@ -361,29 +365,35 @@ const LS_KEY = 'budgetapp_v1';
 // ---- Paste your deployed Apps Script URL here ----
 // After deploying, it looks like:
 // https://script.google.com/macros/s/AKfy.../exec
-let GS_URL = localStorage.getItem('budgetapp_gsurl') || '';
+let GS_URL   = localStorage.getItem('budgetapp_gsurl')   || '';
+let GS_TOKEN = localStorage.getItem('budgetapp_gstoken') || '';
 
 // Show the URL setup banner if not configured
 function checkGsSetup() {
   const banner = document.getElementById('gsBanner');
-  if (!GS_URL) { banner.style.display = 'flex'; }
+  if (!GS_URL || !GS_TOKEN) { banner.style.display = 'flex'; }
   else { banner.style.display = 'none'; }
 }
 function saveGsUrl() {
-  const val = document.getElementById('gsUrlInput').value.trim();
-  if (!val.startsWith('https://script.google.com')) {
-    alert('That doesn\'t look like an Apps Script URL. It should start with https://script.google.com/macros/s/...');
+  const url = document.getElementById('gsUrlInput').value.trim();
+  const tok = document.getElementById('gsTokenInput').value.trim();
+  if (!url.startsWith('https://script.google.com')) {
+    alert('That doesn\'t look like an Apps Script URL.\nIt should start with https://script.google.com/macros/s/...');
     return;
   }
-  GS_URL = val;
-  localStorage.setItem('budgetapp_gsurl', GS_URL);
+  if (!tok) { alert('Please enter your secret token.'); return; }
+  GS_URL   = url;
+  GS_TOKEN = tok;
+  localStorage.setItem('budgetapp_gsurl',   GS_URL);
+  localStorage.setItem('budgetapp_gstoken', GS_TOKEN);
   document.getElementById('gsBanner').style.display = 'none';
   setSyncStatus('syncing');
   fetchFromSheets();
 }
 function clearGsUrl() {
   localStorage.removeItem('budgetapp_gsurl');
-  GS_URL = '';
+  localStorage.removeItem('budgetapp_gstoken');
+  GS_URL = ''; GS_TOKEN = '';
   checkGsSetup();
 }
 
@@ -430,10 +440,10 @@ function lsLoad() {
 
 // ---- Google Sheets sync ----
 async function fetchFromSheets() {
-  if (!GS_URL) return false;
+  if (!GS_URL || !GS_TOKEN) return false;
   setSyncStatus('syncing');
   try {
-    const res = await fetch(GS_URL + '?action=load', { method: 'GET' });
+    const res = await fetch(`${GS_URL}?action=load&token=${encodeURIComponent(GS_TOKEN)}`, { method: 'GET' });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     if (data.allTxns) allTxns = data.allTxns;
@@ -467,12 +477,12 @@ function scheduleSave() {
 }
 
 async function pushToSheets() {
-  if (!GS_URL) { setSyncStatus('offline'); return; }
+  if (!GS_URL || !GS_TOKEN) { setSyncStatus('offline'); return; }
   setSyncStatus('syncing');
   try {
     const res = await fetch(GS_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'save', data: { allTxns, funds, debts, nextFid, nextDid } })
+      body: JSON.stringify({ action: 'save', token: GS_TOKEN, data: { allTxns, funds, debts, nextFid, nextDid } })
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Save failed');
@@ -763,8 +773,8 @@ const hasLocal = lsLoad();
 if (!hasLocal) seedDemo();
 updLabel(); setDateDef(); renderAll();
 checkGsSetup();
-// If URL is configured, fetch fresh data from Sheets in background
-if (GS_URL) fetchFromSheets();
+// If fully configured, fetch fresh data from Sheets in background
+if (GS_URL && GS_TOKEN) fetchFromSheets();
 </script>
 </body>
 </html>
